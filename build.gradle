@@ -1,0 +1,37 @@
+plugins {
+	id 'org.springframework.boot' version '2.7.5'
+	id 'io.spring.dependency-management' version '1.0.15.RELEASE'
+	id 'java'
+}
+
+group = 'web.telegram.bot'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '17'
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web-services'
+	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-aop'
+
+	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+	implementation 'org.telegram:telegrambots-spring-boot-starter:6.5.0'
+
+	compileOnly 'org.projectlombok:lombok'
+
+	annotationProcessor 'org.projectlombok:lombok'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
