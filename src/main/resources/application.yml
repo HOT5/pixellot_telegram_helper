@@ -1,10 +1,3 @@
 telegram-bot:
-  token: 5990853790:AAHmMD5DSsCmXtLs4NnFCr18zxp3WqpkAeE
-  username: InfinityTowerIncrementalBot
-
-spring:
-  data:
-    mongodb:
-      # In Case of mongodb Repel Set
-      uri: mongodb://admin:123456@localhost:27017/clicker-db?authSource=admin&authMechanism=SCRAM-SHA-1
-      database: clicker-db
+  token: 6228250649:AAGI1T5ikdw9VrR2eFgqSJnYIrISRPj7FA4
+  username: Corrupted_Files_Assistance_Bot

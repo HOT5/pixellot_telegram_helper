@@ -21,9 +21,12 @@ repositories {
 dependencies {
 	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web-services'
 	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-aop'
+	implementation group: 'commons-io', name: 'commons-io', version: '2.13.0'
+	implementation group: 'com.github.kokorin.jaffree', name: 'jaffree', version: '2022.06.03'
 
-	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
-	implementation 'org.telegram:telegrambots-spring-boot-starter:6.5.0'
+
+
+	implementation 'org.telegram:telegrambots-spring-boot-starter:6.7.0'
 
 	compileOnly 'org.projectlombok:lombok'
 
