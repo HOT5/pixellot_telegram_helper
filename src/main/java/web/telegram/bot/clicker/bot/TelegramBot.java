@@ -97,22 +97,40 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (message.getText().equalsIgnoreCase("Upload complete") && checkIfUserActivityBegan(message)) {
                 UserActivity userActivity = activityMap.get(message.getFrom().getId());
                 userActivity.setState(UserActivityState.M3U8_FILES_UPLOADED);
-                sendMessageWithEventKeyBoard(message.getChatId());
+
+                int minSize = Math.min(userActivity.getCam00TsFiles().size(), userActivity.getCam01TsFiles().size());
+                sendKeyboardWithMessage(message.getChatId(), "How many frames you want to get? Max number for request: " + userActivity.getRequestId() + " is - " + minSize);
+            }
+            if (checkIfUserActivityBegan(message) && activityMap.containsKey(message.getFrom().getId())
+                    && activityMap.get(message.getFrom().getId()).getState() == UserActivityState.M3U8_FILES_UPLOADED) {
+
+                try {
+                    int numberOfFrames = Integer.parseInt(message.getText());
+                    UserActivity userActivity = activityMap.get(message.getFrom().getId());
+                    if (numberOfFrames > Math.min(userActivity.getCam00TsFiles().size(), userActivity.getCam01TsFiles().size())) {
+                        throw new IllegalArgumentException();
+                    }
+
+                    userActivity.setDesireNumberOfFrames(numberOfFrames);
+                    userActivity.setState(UserActivityState.DESIRE_NUMBER_PROVIDED);
+                    sendMessageWithEventKeyBoard(message.getChatId());
+                } catch (IllegalArgumentException e) {
+                    sendKeyboardWithMessage(message.getChatId(), "Please provide the valid number");
+                }
             }
             if ((message.getText().equalsIgnoreCase("NTT") || message.getText().equalsIgnoreCase("Regular"))
                     && checkIfUserActivityBegan(message)) {
                 UserActivity userActivity = activityMap.get(message.getFrom().getId());
-                if (userActivity.getState() == UserActivityState.M3U8_FILES_UPLOADED) {
+                if (userActivity.getState() == UserActivityState.DESIRE_NUMBER_PROVIDED) {
                     sendKeyboardWithMessage(message.getChatId(), "The process is started for the request: " + userActivity.getRequestId() +
                             "\n\r You will receive the first images shortly");
                     List<String> cam00TsFiles = userActivity.getCam00TsFiles();
                     List<String> cam01TsFiles = userActivity.getCam01TsFiles();
-                    int minSize = Math.min(cam00TsFiles.size(), cam01TsFiles.size());
 
                     int batchSize = 15; // Set the batch size
 
                     // Zip the files into pairs
-                    List<List<String>> pairs = IntStream.range(0, minSize)
+                    List<List<String>> pairs = IntStream.range(0, userActivity.getDesireNumberOfFrames())
                             .mapToObj(i -> Arrays.asList(cam00TsFiles.get(i), cam01TsFiles.get(i)))
                             .collect(Collectors.toList());
 

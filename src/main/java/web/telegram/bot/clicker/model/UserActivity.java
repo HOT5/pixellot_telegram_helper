@@ -13,4 +13,5 @@ public class UserActivity {
     private String requestId;
     private List<String> cam00TsFiles = new ArrayList<>();
     private List<String> cam01TsFiles = new ArrayList<>();
+    private int desireNumberOfFrames;
 }
