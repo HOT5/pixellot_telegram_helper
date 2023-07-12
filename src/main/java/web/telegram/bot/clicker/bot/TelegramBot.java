@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.ParseMode;
+import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendMediaGroup;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Audio;
@@ -30,7 +31,10 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -65,7 +69,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
-            log.info("Process started by user: id - " + update.getMessage().getFrom().getId() + " name - " + update.getMessage().getFrom().getFirstName() + " " + update.getMessage().getFrom().getLastName() );
+            log.info("Process started by user: id - " + update.getMessage().getFrom().getId() + " name - " + update.getMessage().getFrom().getFirstName() + " " + update.getMessage().getFrom().getLastName());
             Message message = update.getMessage();
             if (message.getText().equalsIgnoreCase("/start")) {
                 sendWelcomeMessage(message.getChatId());
@@ -74,95 +78,123 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (message.getText().equalsIgnoreCase("Slice an event")) {
                 if (activityMap.containsKey(message.getFrom().getId())) {
                     UserActivity deletedActivity = activityMap.remove(message.getFrom().getId());
-
-
-                    deleteTmpFiles(String.format("./tmp/img/%s/", deletedActivity.getRequestId()));
-                    deleteTmpFiles(String.format("./tmp/m3u8/%s/", deletedActivity.getRequestId()));
                 }
 
                 UserActivity userActivity = new UserActivity();
                 userActivity.setUserId(message.getFrom().getId());
                 userActivity.setState(UserActivityState.NO_USER_ACTIVITY);
                 activityMap.put(message.getFrom().getId(), userActivity);
+                sendKeyboardWithMessage(message.getChatId(), "Send a request id");
             }
             if (validateRequestId(message.getText()) && checkIfUserActivityBegan(message)) {
                 UserActivity userActivity = activityMap.get(message.getFrom().getId());
                 if (userActivity.getState() == UserActivityState.NO_USER_ACTIVITY) {
                     userActivity.setState(UserActivityState.REQUEST_ID_PROVIDED);
                     userActivity.setRequestId(message.getText());
+                    sendKeyboardWithMessage(message.getChatId(), "Please attach cam00_.m3u8 and cam01_.m3u8 and press Upload complete button");
                 }
             }
             if (message.getText().equalsIgnoreCase("Upload complete") && checkIfUserActivityBegan(message)) {
                 UserActivity userActivity = activityMap.get(message.getFrom().getId());
                 userActivity.setState(UserActivityState.M3U8_FILES_UPLOADED);
-                sendMessageWithEventKeyBoard(message.getChatId());
+
+                int minSize = Math.min(userActivity.getCam00TsFiles().size(), userActivity.getCam01TsFiles().size());
+                sendKeyboardWithMessage(message.getChatId(), "How many frames you want to get? Max number for request: " + userActivity.getRequestId() + " is - " + minSize);
+            }
+            if (checkIfUserActivityBegan(message) && activityMap.containsKey(message.getFrom().getId())
+                    && activityMap.get(message.getFrom().getId()).getState() == UserActivityState.M3U8_FILES_UPLOADED) {
+
+                try {
+                    int numberOfFrames = Integer.parseInt(message.getText());
+                    UserActivity userActivity = activityMap.get(message.getFrom().getId());
+                    if (numberOfFrames > Math.min(userActivity.getCam00TsFiles().size(), userActivity.getCam01TsFiles().size())) {
+                        throw new IllegalArgumentException();
+                    }
+
+                    userActivity.setDesireNumberOfFrames(numberOfFrames);
+                    userActivity.setState(UserActivityState.DESIRE_NUMBER_PROVIDED);
+                    sendMessageWithEventKeyBoard(message.getChatId());
+                } catch (IllegalArgumentException e) {
+                    sendKeyboardWithMessage(message.getChatId(), "Please provide the valid number");
+                }
             }
             if ((message.getText().equalsIgnoreCase("NTT") || message.getText().equalsIgnoreCase("Regular"))
                     && checkIfUserActivityBegan(message)) {
                 UserActivity userActivity = activityMap.get(message.getFrom().getId());
-                if (userActivity.getState() == UserActivityState.M3U8_FILES_UPLOADED) {
-                    int minSize = Math.min(userActivity.getCam00TsFiles().size(), userActivity.getCam01TsFiles().size());
+                if (userActivity.getState() == UserActivityState.DESIRE_NUMBER_PROVIDED) {
+                    sendKeyboardWithMessage(message.getChatId(), "The process is started for the request: " + userActivity.getRequestId() +
+                            "\n\r You will receive the first images shortly");
+                    List<String> cam00TsFiles = userActivity.getCam00TsFiles();
+                    List<String> cam01TsFiles = userActivity.getCam01TsFiles();
 
-                    List<CompletableFuture<List<String>>> futures = IntStream.range(0, minSize)
-                            .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-                                List<String> pair = Arrays.asList(userActivity.getCam00TsFiles().get(i), userActivity.getCam01TsFiles().get(i));
-                                if (message.getText().equalsIgnoreCase("NTT")) {
-                                    m3U8Service.createImageFromFrameNtt(userActivity.getRequestId(), pair.get(0));
-                                    m3U8Service.createImageFromFrameNtt(userActivity.getRequestId(), pair.get(1));
-                                } else {
-                                    m3U8Service.createImageFromFrame(userActivity.getRequestId(), pair.get(0));
-                                    m3U8Service.createImageFromFrame(userActivity.getRequestId(), pair.get(1));
-                                }
-                                return pair;
-                            }, executorService))
+                    int batchSize = 15; // Set the batch size
+
+                    // Zip the files into pairs
+                    List<List<String>> pairs = IntStream.range(0, userActivity.getDesireNumberOfFrames())
+                            .mapToObj(i -> Arrays.asList(cam00TsFiles.get(i), cam01TsFiles.get(i)))
                             .collect(Collectors.toList());
 
-                    // Handle remaining elements in mediaGroup1 (if any)
-                    futures.addAll(userActivity.getCam00TsFiles().subList(minSize, userActivity.getCam00TsFiles().size())
-                            .stream()
-                            .map(filename -> CompletableFuture.supplyAsync(() -> {
+                    // Process batches in a loop
+                    for (int i = 0; i < pairs.size(); i += batchSize) {
+                        int endIndex = Math.min(i + batchSize, pairs.size());
+                        List<List<String>> batchPairs = pairs.subList(i, endIndex);
+
+                        List<CompletableFuture<List<String>>> batchFutures = new ArrayList<>();
+
+                        // Process pairs within the batch
+                        for (List<String> pair : batchPairs) {
+                            CompletableFuture<List<String>> pairFuture = CompletableFuture.supplyAsync(() -> {
+                                String cam00File = pair.get(0);
+                                String cam01File = pair.get(1);
+
                                 if (message.getText().equalsIgnoreCase("NTT")) {
-                                    m3U8Service.createImageFromFrameNtt(userActivity.getRequestId(), filename);
+                                    m3U8Service.createImageFromFrameNtt(userActivity.getRequestId(), cam00File);
+                                    m3U8Service.createImageFromFrameNtt(userActivity.getRequestId(), cam01File);
                                 } else {
-                                    m3U8Service.createImageFromFrame(userActivity.getRequestId(), filename);
+                                    m3U8Service.createImageFromFrame(userActivity.getRequestId(), cam00File);
+                                    m3U8Service.createImageFromFrame(userActivity.getRequestId(), cam01File);
                                 }
-                                return Collections.singletonList(filename);
-                            }, executorService))
-                            .toList());
 
-                    // Handle remaining elements in mediaGroup2 (if any)
-                    futures.addAll(userActivity.getCam01TsFiles().subList(minSize, userActivity.getCam01TsFiles().size())
-                            .stream()
-                            .map(filename -> CompletableFuture.supplyAsync(() -> {
-                                if (message.getText().equalsIgnoreCase("NTT")) {
-                                    m3U8Service.createImageFromFrameNtt(userActivity.getRequestId(), filename);
-                                } else {
-                                    m3U8Service.createImageFromFrame(userActivity.getRequestId(), filename);
-                                }
-                                return Collections.singletonList(filename);
-                            }, executorService))
-                            .collect(Collectors.toList()));
+                                // Return the pair for sending via sendMediaGroup
+                                return List.of(cam00File, cam01File);
+                            }, executorService);
 
-                    CompletableFuture<List<List<String>>> allFutures = CompletableFuture.allOf(
-                                    futures.toArray(new CompletableFuture[0])
-                            )
-                            .thenApplyAsync(v -> futures.stream()
-                                    .map(CompletableFuture::join)
-                                    .collect(Collectors.toList()));
-
-                    try {
-                        List<List<String>> mergedMediaGroups = allFutures.get();
-                        // Process mergedMediaGroups in the desired order
-                        for (List<String> pair : mergedMediaGroups) {
-                            sendMediaGroup(List.of(pair.get(0), pair.get(1)), message.getChatId(), userActivity.getRequestId());
-                            Thread.sleep(450);
+                            batchFutures.add(pairFuture);
                         }
-                    } catch (InterruptedException | ExecutionException e) {
-                        // Handle cancellation or exception
-                        e.printStackTrace();
+
+                        // Wait for all pairs within the batch to complete
+                        CompletableFuture<Void> allPairsFuture = CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0]));
+
+                        // Process the results of the pairs within the batch and send them
+                        CompletableFuture<List<List<String>>> batchResultsFuture = allPairsFuture.thenApplyAsync(v -> {
+                            List<List<String>> batchResults = batchFutures.stream()
+                                    .map(CompletableFuture::join)
+                                    .collect(Collectors.toList());
+
+                            // Send the results via sendMediaGroup
+                            for (List<String> pair : batchResults) {
+                                sendMediaGroup(List.of(pair.get(0), pair.get(1)), message.getChatId(), userActivity.getRequestId());
+                            }
+
+                            return batchResults;
+                        });
+
+                        try {
+                            // Get the results of the batch and handle them if needed
+                            List<List<String>> batchResults = batchResultsFuture.get();
+                            // Process the batch results as desired
+                        } catch (InterruptedException | ExecutionException e) {
+                            // Handle cancellation or exception
+                            e.printStackTrace();
+                        }
                     }
+                    // All batches are done, send the message here
+                    sendKeyboardWithMessage(message.getChatId(), "All images were sent for request: " + userActivity.getRequestId());
+                    deleteTmpFiles(String.format("./tmp/img/%s/", userActivity.getRequestId()));
+                    deleteTmpFiles(String.format("./tmp/m3u8/%s/", userActivity.getRequestId()));
                 }
             }
+
         }
 
         if (update.hasMessage() && update.getMessage().hasDocument() && checkIfUserActivityBegan(update.getMessage())) {
@@ -177,7 +209,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     userActivity.setCam00TsFiles(parseM3U8(update.getMessage().getDocument(), id));
                 }
                 if (document.getFileName().equalsIgnoreCase("cam01_.m3u8")) {
-                    userActivity.setCam01TsFiles(parseM3U8(update.getChannelPost().getDocument(), id));
+                    userActivity.setCam01TsFiles(parseM3U8(update.getMessage().getDocument(), id));
                 }
             }
         }
@@ -319,9 +351,22 @@ public class TelegramBot extends TelegramLongPollingBot {
         try {
             SendMessage message = new SendMessage();
             message.setChatId(chatId);
-            message.setReplyMarkup(keyboardService.defaultKeyboard());
             message.setText("Welcome to the Corrupted Files Assistance");
             execute(message);
+            message.setChatId(chatId);
+            message.setReplyMarkup(keyboardService.defaultKeyboard());
+            message.setText("Follow these rules to make the bot work\n\r" +
+                    "1. Press Slice an event\n\r" +
+                    "2. Send a request id\n\r" +
+                    "3. Shortly after send cam00_.m3u8 and cam01_.m3u8\n\r" +
+                    "4. Press upload complete\n\r" +
+                    "5. Select the request client type\n\r" +
+                    "6. Now is time to chill, approximately it will take 1-3 min, based on the event size\n\r");
+            Message sentMessage = execute(message);
+            PinChatMessage pinChatMessage = new PinChatMessage();
+            pinChatMessage.setChatId(chatId);
+            pinChatMessage.setMessageId(sentMessage.getMessageId());
+            execute(pinChatMessage);
         } catch (TelegramApiException e) {
             throw new RuntimeException(e);
         }
@@ -361,6 +406,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
                 Files.delete(path);
             }
+            Files.delete(directory);
         } catch (IOException e) {
             e.printStackTrace();
         }
