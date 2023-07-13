@@ -18,7 +18,7 @@ FROM openjdk:latest
 WORKDIR .
 
 # Copy the JAR file from the builder stage
-COPY --from=builder build/libs/clicker-0.0.1-SNAPSHOT.jar ./clicker-0.0.1-SNAPSHOT.jar
+COPY --from=builder ./build/libs/clicker-0.0.1-SNAPSHOT.jar ./clicker-0.0.1-SNAPSHOT.jar
 
 # Expose the desired port
 EXPOSE 8080
