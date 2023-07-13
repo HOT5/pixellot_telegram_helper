@@ -5,6 +5,7 @@ import com.github.kokorin.jaffree.ffmpeg.PipeOutput;
 import com.github.kokorin.jaffree.ffmpeg.UrlInput;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -19,7 +20,8 @@ import java.nio.file.StandardOpenOption;
 @RequiredArgsConstructor
 public class M3U8Service {
 
-    private static final String FFMPEG_PATH = "C:\\Users\\Danylo_Ikol\\Downloads\\ffmpeg-6.0-essentials_build\\ffmpeg-6.0-essentials_build\\bin";
+    @Value("${ffmpeg}")
+    private String FFMPEG_PATH;
     private static final String EVENT_URL = "https://content.you.pixellot.tv/requests/%s/SourceFiles/%s";
     private static final String NTT_EVENT_URL = "https://ap.you.pixellot.tv/requests/%s/SourceFiles/%s";
 

@@ -1,3 +1,5 @@
 telegram-bot:
   token: 6228250649:AAGI1T5ikdw9VrR2eFgqSJnYIrISRPj7FA4
   username: Corrupted_Files_Assistance_Bot
+
+ffmpeg: ${FFMPEG_PATH}
