@@ -1,5 +1,7 @@
 telegram-bot:
   token: 6228250649:AAGI1T5ikdw9VrR2eFgqSJnYIrISRPj7FA4
   username: Corrupted_Files_Assistance_Bot
+  webhook-path: 141.145.211.42:8080
+  api-url: https://api.telegram.org/
 
 ffmpeg: ${FFMPEG_PATH}

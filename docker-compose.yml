@@ -1,8 +1,11 @@
-version: '3.3'
-
+version: '3'
 services:
-  mongo_db:
-    image: "mongo:4.4.3"
-    restart: always
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "27017:27017"
+      - 8080:8080
+    environment:
+      - FFMPEG_PATH=/usr/local/bin/ffmpeg
+    restart: always

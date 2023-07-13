@@ -1,86 +1,55 @@
 package web.telegram.bot.clicker.service;
 
-import com.github.kokorin.jaffree.ffmpeg.FFmpeg;
-import com.github.kokorin.jaffree.ffmpeg.PipeOutput;
-import com.github.kokorin.jaffree.ffmpeg.UrlInput;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import org.apache.commons.io.IOUtils;
+import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.meta.api.objects.Document;
+import web.telegram.bot.clicker.telegram.TelegramApiClient;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-@Component
+@Service
 @Slf4j
 @RequiredArgsConstructor
 public class M3U8Service {
 
-    @Value("${ffmpeg}")
-    private String FFMPEG_PATH;
-    private static final String EVENT_URL = "https://content.you.pixellot.tv/requests/%s/SourceFiles/%s";
-    private static final String NTT_EVENT_URL = "https://ap.you.pixellot.tv/requests/%s/SourceFiles/%s";
+    private final TelegramApiClient telegramApiClient;
 
-
-    public void createImageFromFrame(String requestId, String frameName) {
-        String fileName = frameName.substring(0, frameName.lastIndexOf('.'));
-        String outputFilePath = String.format(".\\tmp\\img\\%s\\%s.jpg", requestId, fileName);
-
+    public List<String> parseM3U8(Document document, String requestId) {
         try {
-            Path outputPath = Paths.get(outputFilePath);
-            Files.createDirectories(outputPath.getParent());
+            File downloadedFile = telegramApiClient.getDocumentFile(document, requestId);
 
-            try (OutputStream outputStream = Files.newOutputStream(outputPath, StandardOpenOption.CREATE_NEW)) {
-                FFmpeg.atPath(Paths.get(FFMPEG_PATH))
-                        .addInput(
-                                UrlInput.fromUrl(String.format(EVENT_URL, requestId, frameName))
-                        )
-                        .addArguments("-vsync", "2")
-                        .addArguments("-ss", "1")
-                        .addArguments("-vframes", "1")
-                        .addOutput(PipeOutput.pumpTo(outputStream)
-                                .setFormat("image2"))
-                        .execute();
+            FileInputStream fis = new FileInputStream(downloadedFile);
+            String fileContent = IOUtils.toString(fis, StandardCharsets.UTF_8);
 
-                log.info("FFmpeg command executed successfully!");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            List<String> tsFiles = getTsFiles(fileContent);
+            log.info(tsFiles.toString());
+
+            return tsFiles;
+
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public void createImageFromFrameNtt(String requestId, String frameName) {
-        String fileName = frameName.substring(0, frameName.lastIndexOf('.'));
-        String outputFilePath = String.format(".\\tmp\\img\\%s\\%s.jpg", requestId, fileName);
+    private List<String> getTsFiles(String fileContent) {
+        Pattern pattern = Pattern.compile("([a-zA-Z0-9_-]+\\.ts)");
+        Matcher matcher = pattern.matcher(fileContent);
 
-        try {
-            Path outputPath = Paths.get(outputFilePath);
-            Files.createDirectories(outputPath.getParent());
-
-            try (OutputStream outputStream = Files.newOutputStream(outputPath, StandardOpenOption.CREATE_NEW)) {
-                FFmpeg.atPath(Paths.get(FFMPEG_PATH))
-                        .addInput(
-                                UrlInput.fromUrl(String.format(NTT_EVENT_URL, requestId, frameName))
-                        )
-                        .addArguments("-vsync", "2")
-                        .addArguments("-ss", "1")
-                        .addArguments("-vframes", "1")
-                        .addOutput(PipeOutput.pumpTo(outputStream)
-                                .setFormat("image2"))
-                        .execute();
-
-                log.info("FFmpeg command executed successfully!");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        List<String> tsFileNames = new ArrayList<>();
+        while (matcher.find()) {
+            String tsFileName = matcher.group(1);
+            tsFileNames.add(tsFileName);
         }
+
+        return tsFileNames;
     }
 }
