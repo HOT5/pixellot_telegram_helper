@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.io.File; // Import File class
 
 @Component
 @Slf4j
@@ -25,10 +26,10 @@ public class M3U8Service {
     private static final String EVENT_URL = "https://content.you.pixellot.tv/requests/%s/SourceFiles/%s";
     private static final String NTT_EVENT_URL = "https://ap.you.pixellot.tv/requests/%s/SourceFiles/%s";
 
-
     public void createImageFromFrame(String requestId, String frameName) {
         String fileName = frameName.substring(0, frameName.lastIndexOf('.'));
-        String outputFilePath = String.format(".\\tmp\\img\\%s\\%s.jpg", requestId, fileName);
+        String outputFilePath = String.format(".%stmp%simg%s%s%s%s.jpg",
+                File.separator, File.separator, File.separator, requestId, File.separator, fileName);
 
         try {
             Path outputPath = Paths.get(outputFilePath);
@@ -57,7 +58,8 @@ public class M3U8Service {
 
     public void createImageFromFrameNtt(String requestId, String frameName) {
         String fileName = frameName.substring(0, frameName.lastIndexOf('.'));
-        String outputFilePath = String.format(".\\tmp\\img\\%s\\%s.jpg", requestId, fileName);
+        String outputFilePath = String.format(".%stmp%simg%s%s%s%s.jpg",
+                File.separator, File.separator, File.separator, requestId, File.separator, fileName);
 
         try {
             Path outputPath = Paths.get(outputFilePath);
